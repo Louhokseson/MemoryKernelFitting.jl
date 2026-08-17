@@ -1,13 +1,19 @@
 ################################################################################
-#                          DrWatson Project Structure                          #
+#                                   Package                                    #
 ################################################################################
 
-# Folders to ignore - files may be too large, too many, etc. NOTE: EDIT IF NEEDED.
+# A library must not pin its dependencies' versions for downstream users.
+/Manifest.toml
+
+# Output folders - files may be too large, too many, etc. NOTE: EDIT IF NEEDED.
 /data
 /videos
 /plots
 /notebooks
 /_research
+
+# Working notes - kept local, not published with the package.
+/docs
 
 ################################################################################
 #                                    Julia                                     #
