@@ -49,9 +49,9 @@ $\beta \to 0$ while $\alpha$ stays finite. No special case needed.
 
 Set $m = K_R + 2K_C$ and keep the real rotation blocks rather than diagonalising:
 
-$$
-\boldsymbol\Gamma_{2,2} = \operatorname{blockdiag}\big(\lambda_1,\dots,\lambda_{K_R},\ R(\alpha_1,\beta_1),\dots\big), \qquad R(\alpha,\beta) = \begin{pmatrix}\alpha & \beta\\ -\beta & \alpha\end{pmatrix},
-$$
+```math
+\boldsymbol\Gamma_{2,2} = \text{blockdiag}\big(\lambda_1,\dots,\lambda_{K_R},\ R(\alpha_1,\beta_1),\dots\big), \qquad R(\alpha,\beta) = \begin{pmatrix}\alpha & \beta\\ -\beta & \alpha\end{pmatrix},
+```
 
 $$
 \widetilde{\boldsymbol\Gamma}_{1,1}(x) = a_0(x), \qquad \boldsymbol g(x) = \big(\sqrt{a_1},\dots,\ \sqrt{A_1},0,\ \dots\big)^T, \qquad \widetilde{\boldsymbol\Gamma}_{2,1} = \boldsymbol g,\quad \widetilde{\boldsymbol\Gamma}_{1,2} = -\boldsymbol g^T.
