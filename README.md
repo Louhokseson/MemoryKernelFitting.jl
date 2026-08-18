@@ -49,25 +49,23 @@ $\widetilde{\boldsymbol\Sigma}(x)$ can be constructed.
 
 </div>
 
-$$
+```math
+\begin{aligned}
 \Lambda_\theta(x,\omega)
-=
-a_0(x)
-+
-\sum_{k=1}^{K_R} a_k(x)\frac{\lambda_k}{\lambda_k^2+\omega^2}
-+
-\sum_{j=1}^{K_C} A_j(x)L(\omega;\alpha_j,\beta_j),
-$$
+&= a_0(x)
+ + \sum_{k=1}^{K_R} a_k(x)\frac{\lambda_k}{\lambda_k^2+\omega^2} \\
+&\quad + \sum_{j=1}^{K_C} A_j(x)L(\omega;\alpha_j,\beta_j),
+\end{aligned}
+```
 
-$$
+```math
+\begin{aligned}
 K(x,\tau)
-=
-2a_0(x)\delta(\tau)
-+
-\sum_k a_k(x)e^{-\lambda_k\tau}
-+
-\sum_j A_j(x)e^{-\alpha_j\tau}\cos(\beta_j\tau).
-$$
+&= 2a_0(x)\delta(\tau)
+ + \sum_k a_k(x)e^{-\lambda_k\tau} \\
+&\quad + \sum_j A_j(x)e^{-\alpha_j\tau}\cos(\beta_j\tau).
+\end{aligned}
+```
 
 ## Features
 
@@ -181,18 +179,17 @@ Design decisions with lasting consequences are recorded in
 
 The mirrored underdamped basis is
 
-$$
+```math
+\begin{aligned}
 L(\omega;\alpha,\beta)
-=
-\frac{\alpha}{2}
+&= \frac{\alpha}{2}
 \left[
 \frac{1}{\alpha^2+(\omega-\beta)^2}
-+
-\frac{1}{\alpha^2+(\omega+\beta)^2}
-\right],
-\qquad
-a_0,a_k,A_j\ge 0.
-$$
++ \frac{1}{\alpha^2+(\omega+\beta)^2}
+\right], \\
+a_0,\,a_k,\,A_j &\ge 0.
+\end{aligned}
+```
 
 <div align="justify">
 
@@ -221,35 +218,37 @@ zero-centred response.
 Set $m=K_R+2K_C$ and retain real rotation blocks:
 
 ```math
+\begin{aligned}
 \boldsymbol\Gamma_{2,2}
-=
-\text{blockdiag}
+&= \mathrm{blockdiag}
 \left(
 \lambda_1,\ldots,\lambda_{K_R},
 R(\alpha_1,\beta_1),\ldots
-\right),
-\qquad
+\right), \\
 R(\alpha,\beta)
-=
+&=
 \begin{pmatrix}
 \alpha & \beta\\
 -\beta & \alpha
 \end{pmatrix}.
+\end{aligned}
 ```
 
-$$
-\widetilde{\boldsymbol\Gamma}_{1,1}(x)=a_0(x),
-\qquad
+```math
+\begin{aligned}
+\widetilde{\boldsymbol\Gamma}_{1,1}(x)
+&=a_0(x), \\
 \boldsymbol g(x)
-=
+&=
 \left(
 \sqrt{a_1},\ldots,\sqrt{A_1},0,\ldots
-\right)^T,
+\right)^T, \\
+\widetilde{\boldsymbol\Gamma}_{2,1}
+&=\boldsymbol g,
 \qquad
-\widetilde{\boldsymbol\Gamma}_{2,1}=\boldsymbol g,
-\quad
 \widetilde{\boldsymbol\Gamma}_{1,2}=-\boldsymbol g^T.
-$$
+\end{aligned}
+```
 
 Two structural consequences make the fit well posed:
 
