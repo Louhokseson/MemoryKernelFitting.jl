@@ -1,6 +1,6 @@
 # Stage-1 Prony fit of the Erpenbeck–Thoss spectral density at Γ = 0.1 eV.
 #
-#   julia scripts/fit_gamma01.jl
+#   julia scripts/fitting/fit_gamma01.jl
 #
 # Γ = 0.1 first, per `Prony_fit_optimisation_problem.md` §7 step 1: no negative entries,
 # the resonance sits well inside the 60 eV window, and Δ ≈ 0.05 eV is comfortably above
@@ -33,16 +33,35 @@ end
 # ------------------------------------------------------------------------------------
 
 const GAMMA_EV   = 0.1
-# Ladder composition, per the design/0003 correction. Pairs alone leave the Fermi
-# crossing — the tallest column in the dataset — at 95% relative error, because α = 0.2β
-# ties width to frequency and so cannot make a *broad* zero-centred peak. Real rates
-# reaching down to the identifiability floor fix it, and 20+12 is both better and
-# cheaper (m = 52) than the 30+0 (m = 60) it replaces.
-const K_C        = 20            # mirrored pairs
-const K_R        = 12            # real (overdamped) rates
-const BETA_MIN   = 1.8e-3        # Ha — 0.05 eV
-const BETA_MAX   = 0.345         # Ha — 9.4 eV, covering max ω_pk = 8.89 eV
-const LAMBDA_MIN = 1.8e-4        # Ha — 5·dω, the identifiability floor of §4
+
+# Ladder composition. Two corrections stand behind this, both measured on this dataset.
+#
+# design/0003: pairs alone leave the Fermi crossing — the tallest column in the set — at
+# 95% relative error, because α = 0.2β ties width to frequency and so cannot make a
+# *broad* zero-centred peak. Real rates reaching to the identifiability floor fix it.
+#
+# The split, and K_R = 3. The spectrum asks two unrelated things of the ladder. Below
+# 9.4 eV it must resolve a resonance that moves with x; above 10 eV it must only set the
+# ω⁻² coefficient of the tail, since |h| ≤ 8.65 eV means there is no resonance up there.
+# One log span spends rungs as if both jobs were the same: stretching β_max to 60 eV at
+# K_C = 20 moves six rungs out of the resonance band to buy what four would have bought.
+# Splitting 16 + 4 keeps the resonance band dense and still fixes the far-column tail,
+# which decays as ω⁻² (the near-crossing columns decay as ω⁻³ and are out of reach of any
+# Lorentzian sum — that is what the ε floor exists to discount, not a budget problem).
+#
+# K_R = 3 rather than 12 because 9 of the 12 rates were dead: on the previous ladder,
+# λ₅…λ₁₂ carried amplitude in *zero* columns. Real rates exist to build the broad
+# zero-centred peak at the crossing, whose half-width is Δ + k_BT ≈ 0.077 eV, so λ_max
+# belongs there and not at β_max. That alone is 9 auxiliary variables.
+#
+# Net: m = 52 → 43, better on every band, J/J₀ 0.193 → 0.135.
+const K_C_LO     = 16            # pairs over the resonance band
+const K_C_HI     = 4             # pairs over the tail band
+const K_R        = 3             # real (overdamped) rates
+const BETA_LO    = (1.8e-3, 0.345)      # Ha — [0.049, 9.39] eV, spanning max ω_pk = 8.89
+const BETA_HI    = (0.441, 2.20496)     # Ha — [12.0, 60.0] eV, the tail band
+const LAMBDA_LO  = 1.84e-4       # Ha — 5·dω, the identifiability floor of §4
+const LAMBDA_HI  = 1.84e-3       # Ha — 0.05 eV, just under the crossing width Δ + k_BT
 const EPSILON    = 1e-3          # §3 residual floor
 const ANCHOR_W   = 1e3           # §4 Markovian anchor, as a weighted row
 const BANDS      = [(0.0, 0.1), (0.1, 1.0), (1.0, 10.0), (10.0, 60.0)]
@@ -67,16 +86,19 @@ v   = trapezoid_weights(s.x)                  # non-negotiable on this graded gr
 ωeV = hartree_to_eV.(ω)
 low = ωeV .<= 1.0                             # the band the resonance lives in
 
-ladder = log_ladder(BETA_MIN, BETA_MAX, K_C; K_R, λ_min = LAMBDA_MIN)
-zero_model = GridAmplitudes(length(s.x), K_R, K_C)
+ladder = split_ladder([(BETA_LO..., K_C_LO), (BETA_HI..., K_C_HI)],
+                      K_R, LAMBDA_LO, LAMBDA_HI)
+zero_model = GridAmplitudes(length(s.x), K_R, K_C_LO + K_C_HI)
 J₀ = objective_value(ladder, zero_model, ω, Λ, v, σ)
 
 @printf("Γ = %.2f eV | %d configurations (x ∈ [%.2f, %.2f] Å) | %d of %d frequencies retained\n",
         hartree_to_eV(s.Γ), length(s.x), first(s.x), last(s.x), length(idx), length(s.ω))
-@printf("ladder: %d pairs + %d real rates, m = %d | β ∈ [%.3f, %.3f] eV, λ ∈ [%.4f, %.3f] eV\n",
-        K_C, K_R, auxiliary_dimension(ladder),
-        hartree_to_eV(BETA_MIN), hartree_to_eV(BETA_MAX),
-        hartree_to_eV(LAMBDA_MIN), hartree_to_eV(BETA_MAX))
+@printf("ladder: %d + %d pairs + %d real rates, m = %d\n",
+        K_C_LO, K_C_HI, K_R, auxiliary_dimension(ladder))
+@printf("        β ∈ [%.3f, %.2f] ∪ [%.1f, %.1f] eV, λ ∈ [%.4f, %.3f] eV\n",
+        hartree_to_eV(BETA_LO[1]), hartree_to_eV(BETA_LO[2]),
+        hartree_to_eV(BETA_HI[1]), hartree_to_eV(BETA_HI[2]),
+        hartree_to_eV(LAMBDA_LO), hartree_to_eV(LAMBDA_HI))
 @printf("zero-model objective J₀ = %.1f (bound |ℬ|Σvᵢ = %.1f)\n\n",
         J₀, length(idx) * sum(v))
 
@@ -170,35 +192,48 @@ println()
 # ------------------------------------------------------------------------------------
 #
 # §5 expects a full-dictionary NNLS with 10–40 atoms to reach 0.1–5%. If the error
-# plateaus in K_C then the limit is the model class, not the budget, and buying more
-# rungs (each costing 2 auxiliary variables and a tighter timestep via β_max) is wasted.
-
-# K_C and K_R are not independent: the K_C plateau measured with K_R = 0 sits in a
-# different place once real rates are present, so sweep the composition, not one axis.
-compo        = [(30, 0), (30, 12), (20, 0), (20, 12), (14, 12), (10, 12), (10, 0)]
+# plateaus then the limit is the model class, not the budget, and buying more rungs — two
+# auxiliary variables each — is wasted.
+#
+# The three axes are not independent, so sweep the whole composition rather than one at a
+# time. `(K_C_lo, K_C_hi, K_R)`, with the last two rows the ladders this file used to
+# run, kept so the comparison that motivated the split stays in the record.
+#
+# The far tail is reported separately, over x ≥ 3 Å only. Those columns decay as ω⁻² and
+# the model can follow them; the near-crossing columns decay as ω⁻³ and it cannot, so a
+# tail number pooled over all x measures the model class rather than the ladder. The far
+# columns are not a minority interest — they carry half the quadrature weight.
+far   = s.x .>= 3.0
+tail  = 10.0 .< ωeV .<= 60.0
+compo = [(16, 4, 3), (16, 3, 3), (15, 4, 3), (14, 4, 3), (13, 3, 3),
+         (16, 4, 12), (20, 0, 12), (20, 0, 0)]
 sweep_KC     = [c[1] for c in compo]
-sweep_KR     = [c[2] for c in compo]
-sweep_KC_m   = zeros(Int, length(compo))
-sweep_KC_low = zeros(length(compo))
-sweep_KC_res = zeros(length(compo))
-sweep_KC_J   = zeros(length(compo))
-for (k, (KC, KR)) in enumerate(compo)
-    lad = KR == 0 ? log_ladder(BETA_MIN, BETA_MAX, KC) :
-                    log_ladder(BETA_MIN, BETA_MAX, KC; K_R = KR, λ_min = LAMBDA_MIN)
+sweep_KH     = [c[2] for c in compo]
+sweep_KR     = [c[3] for c in compo]
+sweep_KC_m    = zeros(Int, length(compo))
+sweep_KC_low  = zeros(length(compo))
+sweep_KC_res  = zeros(length(compo))
+sweep_KC_tail = zeros(length(compo))
+sweep_KC_J    = zeros(length(compo))
+for (k, (KC, KH, KR)) in enumerate(compo)
+    segs = KH == 0 ? [(BETA_LO..., KC)] : [(BETA_LO..., KC), (BETA_HI..., KH)]
+    lad = split_ladder(segs, KR, LAMBDA_LO, KR > 3 ? BETA_LO[2] : LAMBDA_HI)
     m = fit_amplitudes(lad, ω, Λ; ε = EPSILON, anchor_weight = ANCHOR_W)
-    e = abs.(relative_errors(lad, m, ω, Λ))
-    sweep_KC_m[k]   = auxiliary_dimension(lad)
-    sweep_KC_low[k] = median_(e[low, :])
-    sweep_KC_res[k] = median_(e[low, i_res])
-    sweep_KC_J[k]   = objective_value(lad, m, ω, Λ, v, σ) / J₀
+    e = relative_errors(lad, m, ω, Λ)
+    sweep_KC_m[k]    = auxiliary_dimension(lad)
+    sweep_KC_low[k]  = median_(abs.(e[low, :]))
+    sweep_KC_res[k]  = median_(abs.(e[low, i_res]))
+    sweep_KC_tail[k] = median_(e[tail, far])          # signed: the sign is the finding
+    sweep_KC_J[k]    = objective_value(lad, m, ω, Λ, v, σ) / J₀
 end
 
 println("error vs ladder composition")
-println("   K_C   K_R     m     all-x      at x₀       J/J₀")
+println("  K_C_lo  K_C_hi   K_R     m     all-x      at x₀   tail x≥3      J/J₀")
 for k in eachindex(compo)
-    @printf("  %4d  %4d  %4d  %8.2f%%  %8.2f%%  %8.4f\n",
-            sweep_KC[k], sweep_KR[k], sweep_KC_m[k],
-            100 * sweep_KC_low[k], 100 * sweep_KC_res[k], sweep_KC_J[k])
+    @printf("  %6d  %6d  %4d  %4d  %8.2f%%  %8.2f%%  %8.1f%%  %8.4f\n",
+            sweep_KC[k], sweep_KH[k], sweep_KR[k], sweep_KC_m[k],
+            100 * sweep_KC_low[k], 100 * sweep_KC_res[k],
+            100 * sweep_KC_tail[k], sweep_KC_J[k])
 end
 println()
 
@@ -210,8 +245,26 @@ println()
 # that produced them — the pair is meaningless split up. Atomic units throughout
 # (design/0001); x stays in Å.
 
-outfile = datadir("fits", savename("prony_stage1", (Gamma_eV = GAMMA_EV, K_C = K_C, K_R = K_R,
-                                                    eps = EPSILON, anchor = ANCHOR_W), "h5"))
+# The whole ladder belongs in the name, not just the counts: two fits with the same
+# (K_C, K_R) but different segment spans are different models, and without the spans the
+# second silently overwrites the first. `m` leads because it is the number the rest of
+# the scheme is paid in — the size of Γ₂,₂ and of the auxiliary state the SDE carries.
+# `sort = false` keeps that reading order; DrWatson would otherwise alphabetise it away.
+eV3(x) = round(hartree_to_eV(x); sigdigits = 3)
+fit_id = (Gamma_eV = GAMMA_EV,
+          m        = auxiliary_dimension(ladder),
+          KC       = "$(K_C_LO)+$(K_C_HI)",
+          K_R      = K_R,
+          blo_eV   = "$(eV3(BETA_LO[1]))-$(eV3(BETA_LO[2]))",
+          bhi_eV   = "$(eV3(BETA_HI[1]))-$(eV3(BETA_HI[2]))",
+          lam_eV   = "$(eV3(LAMBDA_LO))-$(eV3(LAMBDA_HI))",
+          eps      = EPSILON,
+          anchor   = ANCHOR_W)
+
+# The representation is part of the model's identity, not a detail: the same ladder
+# fitted as a grid and as a Chebyshev expansion are different fits and must not collide.
+# `fit_tag` derives it from the type actually fitted, so the name cannot drift.
+outfile = datadir("fits", savename("prony_$(fit_tag(fit))", fit_id, "h5"; sort = false))
 mkpath(dirname(outfile))
 h5open(outfile, "w") do f
     f["a0_au"]      = fit.a₀
@@ -223,8 +276,13 @@ h5open(outfile, "w") do f
     f["beta_Ha"]    = ladder.β
     f["omega_Ha"]   = ω
     attrs(f)["Gamma_eV"]      = GAMMA_EV
-    attrs(f)["K_C"]           = K_C
+    attrs(f)["K_C_lo"]        = K_C_LO
+    attrs(f)["K_C_hi"]        = K_C_HI
+    attrs(f)["K_C"]           = K_C_LO + K_C_HI
     attrs(f)["K_R"]           = K_R
+    attrs(f)["beta_lo_eV"]    = [eV3(BETA_LO[1]), eV3(BETA_LO[2])]
+    attrs(f)["beta_hi_eV"]    = [eV3(BETA_HI[1]), eV3(BETA_HI[2])]
+    attrs(f)["lambda_eV"]     = [eV3(LAMBDA_LO), eV3(LAMBDA_HI)]
     attrs(f)["m_auxiliary"]   = auxiliary_dimension(ladder)
     attrs(f)["epsilon"]       = EPSILON
     attrs(f)["anchor_weight"] = ANCHOR_W
@@ -233,6 +291,8 @@ h5open(outfile, "w") do f
     attrs(f)["J_over_J0"]     = J / J₀
     attrs(f)["units"]         = "amplitudes and ω in atomic units (Ha); x in Å"
     attrs(f)["column_order"]  = "amplitude vector per node is (a₀, a, A), as design_matrix"
+    attrs(f)["amplitude_model"] = string(nameof(typeof(fit)))
+    attrs(f)["fit_tag"]       = fit_tag(fit)
     attrs(f)["stage"]         = "stage 1 (grid amplitudes, μ = 0, decoupled per column)"
     attrs(f)["git"]           = gitdescribe(projectdir())
 
@@ -258,8 +318,10 @@ h5open(outfile, "w") do f
     f["sweeps/anchor_median"]            = sweep_w_med
     f["sweeps/anchor_max"]               = sweep_w_max
     f["sweeps/anchor_lowband_median"]    = sweep_w_low
-    f["sweeps/K_C"]                      = sweep_KC
+    f["sweeps/K_C_lo"]                   = sweep_KC
+    f["sweeps/K_C_hi"]                   = sweep_KH
     f["sweeps/K_R"]                      = sweep_KR
+    f["sweeps/K_C_tail_far_median"]      = sweep_KC_tail
     f["sweeps/K_C_resonance_median"]     = sweep_KC_res
     f["errors/median_by_x_lowband"]      = per_column
     attrs(f)["x_resonance_Ang"]          = s.x_resonance
