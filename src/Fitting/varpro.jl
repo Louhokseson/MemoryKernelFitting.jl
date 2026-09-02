@@ -87,39 +87,51 @@ function tracking_solve(tp::TrackingPoles, ω::AbstractVector, Λ::AbstractMatri
                         v::AbstractVector; anchor_weight = 0, alg::Symbol = :nnls)
     N_x = size(Λ, 2)
     K_R, K_C = mode_counts(tp)
-    # One design buffer per thread. `:static` scheduling is what makes indexing them by
-    # `threadid()` correct — under the default scheduler a task may migrate between
-    # threads mid-iteration and two columns could then share a buffer.
-    Ms = [Matrix{Float64}(undef, length(ω), 1 + K_R + K_C) for _ in 1:Threads.nthreads()]
     a₀ = Vector{Float64}(undef, N_x)
     a = Matrix{Float64}(undef, K_R, N_x)
     A = Matrix{Float64}(undef, K_C, N_x)
     # Per-column, then summed in index order: the total is bit-identical however many
     # threads run it, which a running `J += …` inside the loop would not be.
     Jcol = Vector{Float64}(undef, N_x)
-    Threads.@threads :static for i in 1:N_x
-        M = Ms[Threads.threadid()]
-        @inbounds begin
-            ps = poleset(tp, h[i], Δ[i], kT)
-            _fill_design!(M, ps, ω)
-            yi, σi = view(Λ, :, i), view(σ, :, i)
-            θ = iszero(anchor_weight) ?
-                fit_column(M, yi, σi; alg) :
-                fit_column(M, yi, σi; anchor = (markovian_anchor_row(ps), Λ[1, i]),
-                           anchor_weight, alg)
-            a₀[i] = θ[1]
-            copyto!(view(a, :, i), view(θ, 2:(1 + K_R)))
-            copyto!(view(A, :, i), view(θ, (2 + K_R):(1 + K_R + K_C)))
-            c = 0.0
-            for j in axes(Λ, 1)
-                r = 0.0
-                for p in axes(M, 2)
-                    r += M[j, p] * θ[p]
+
+    # One design buffer per *chunk of columns*, never one per thread indexed by
+    # `threadid()`. That indexing is unsound: `nthreads()` counts the default pool
+    # alone while `threadid()` also numbers the interactive pool above it, so a
+    # runtime started with an interactive thread reads past the end of the vector —
+    # a BoundsError on Julia's current release, and silent sharing if the vector had
+    # happened to be long enough. Chunking gives each task exactly one buffer it
+    # owns for its whole lifetime, which is what the loop actually needs.
+    nchunks = max(1, min(Threads.nthreads(), N_x))
+    chunks = collect(Iterators.partition(1:N_x, cld(N_x, nchunks)))
+    Ms = [Matrix{Float64}(undef, length(ω), 1 + K_R + K_C) for _ in eachindex(chunks)]
+    @sync for (t, cols) in enumerate(chunks)
+        Threads.@spawn begin
+            M = Ms[t]
+            for i in cols
+                @inbounds begin
+                    ps = poleset(tp, h[i], Δ[i], kT)
+                    _fill_design!(M, ps, ω)
+                    yi, σi = view(Λ, :, i), view(σ, :, i)
+                    θ = iszero(anchor_weight) ?
+                        fit_column(M, yi, σi; alg) :
+                        fit_column(M, yi, σi;
+                                   anchor = (markovian_anchor_row(ps), Λ[1, i]),
+                                   anchor_weight, alg)
+                    a₀[i] = θ[1]
+                    copyto!(view(a, :, i), view(θ, 2:(1 + K_R)))
+                    copyto!(view(A, :, i), view(θ, (2 + K_R):(1 + K_R + K_C)))
+                    c = 0.0
+                    for j in axes(Λ, 1)
+                        r = 0.0
+                        for p in axes(M, 2)
+                            r += M[j, p] * θ[p]
+                        end
+                        d = (r - Λ[j, i]) / σ[j, i]
+                        c += d * d
+                    end
+                    Jcol[i] = v[i] * c
                 end
-                d = (r - Λ[j, i]) / σ[j, i]
-                c += d * d
             end
-            Jcol[i] = v[i] * c
         end
     end
     return (; J = sum(Jcol), model = GridAmplitudes(a₀, a, A))
