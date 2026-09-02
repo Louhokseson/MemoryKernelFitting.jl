@@ -104,9 +104,17 @@ et_files = isdir(et_dir) ?
     @testset "fermi_crossing" begin
         x₀ = fermi_crossing(m)
         @test x₀ ≈ 2.0203445032675518 atol = 1e-9
-        # Solved to the last representable Float64, not to a tolerance.
-        @test abs(level_position(x₀, m)) < 1e-16
-        @test x₀ == fermi_crossing(m; bracket = (1.9, 2.5))   # bracket-independent
+
+        # Converged to the last representable Float64: no root-finder can do better
+        # than |h| <= |h'| * eps(x0), so state that bound rather than a bare 1e-16 —
+        # the bare threshold had only 3.8x of margin and is a libm change away from
+        # failing.
+        @test abs(level_position(x₀, m)) ≤ 2 * abs(dlevel_position(x₀, m)) * eps(x₀)
+
+        # Bracket-independent to within a couple of ULP. Not `==`: bisection from a
+        # different bracket visits different midpoints and may land on the adjacent
+        # float, so bitwise equality would be asserting the search path, not the root.
+        @test fermi_crossing(m; bracket = (1.9, 2.5)) ≈ x₀ atol = 4 * eps(x₀)
 
         @test_throws ArgumentError fermi_crossing(m; bracket = (3.0, 1.5))
         @test_throws ArgumentError fermi_crossing(m; bracket = (2.5, 3.0))  # no sign change
@@ -114,7 +122,8 @@ et_files = isdir(et_dir) ?
         # The second, inner crossing: real, but the graded grid barely samples it.
         x_inner = fermi_crossing(m; bracket = (0.8, 1.0))
         @test x_inner ≈ 0.8805357513456046 atol = 1e-9
-        @test abs(level_position(x_inner, m)) < 1e-16
+        @test abs(level_position(x_inner, m)) ≤
+              2 * abs(dlevel_position(x_inner, m)) * eps(x_inner)
         @test x_inner < x₀
     end
 

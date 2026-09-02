@@ -35,7 +35,13 @@ end
         # THE LOAD-BEARING TEST. Everything downstream fits through M but is read out
         # through the poles and amplitudes; if these two forms of the model disagree,
         # the SDE does not realise what was fitted.
-        @test M * θ == [spectral_density(w, ps, a₀, a, A) for w in ω]
+        #
+        # Not `==`: the left side is a BLAS matrix-vector product and the right a
+        # hand-written sum, so they accumulate in different orders and may use FMA
+        # differently. They agreed bitwise on aarch64 and differed by one ULP on
+        # x86-64 OpenBLAS. A few ULP still pins them to the same computation; bitwise
+        # equality was asserting something about the BLAS kernel, not about the model.
+        @test M * θ ≈ [spectral_density(w, ps, a₀, a, A) for w in ω] rtol = 1e-14
 
         # Column c is basis function c, in the (a₀, a, A) order of `amplitudes`.
         for (k, λ) in enumerate(ps.λ)
