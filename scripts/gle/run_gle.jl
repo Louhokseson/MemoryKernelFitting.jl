@@ -2,7 +2,7 @@
 #
 #   julia --project=. scripts/gle/run_gle.jl
 #
-# A molecule is launched at `x = 5` Å with `3` eV of translational energy directed at the
+# A molecule is launched at `x = 5` Å with `2` eV of translational energy directed at the
 # surface. It accelerates in, crosses the Fermi resonance, turns around on the repulsive
 # wall near `1.4` Å, crosses the resonance again on the way out, and leaves. The observable
 # is the translational energy it leaves with — which is what a molecular-beam experiment
