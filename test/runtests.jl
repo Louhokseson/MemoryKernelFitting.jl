@@ -10,4 +10,5 @@ using Test
     include("test_fitting.jl")
     include("test_basis_fit.jl")
     include("test_tracking_poles.jl")
+    include("test_continuous.jl")
 end

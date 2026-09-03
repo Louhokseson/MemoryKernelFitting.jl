@@ -16,6 +16,10 @@ atomic units — see [`MemoryKernelFitting.Units`](@ref).
 module PronySeriesFriction
 
 using ..MemoryKernelFitting: AmplitudeModel
+# The continuous readout of `continuous.jl` needs the analytic `h`, `Δ` and `Λ(x,0)`
+# behind the data. That is the one place this module looks at a specific system.
+using ..SpectralData: ErpenbeckThossModel, level_position, hybridisation_width,
+                      markovian_friction
 
 export lorentzian, mirrored_lorentzian
 export spectral_density, memory_kernel
@@ -26,7 +30,8 @@ export TiedLaw, tied_seed, expand, N_TIED
 export GridAmplitudes, PolynomialAmplitudes, ChebyshevAmplitudes, warp_coordinate
 export fit_tag, BasisAmplitudes
 export n_configurations, mode_counts, amplitudes, parameters, parameters!
-export QGLEBlocks, qgle_blocks, gamma_matrix, exp_gamma22
+export QGLEBlocks, qgle_blocks, gamma_matrix, exp_gamma22, qgle_coupling!
+export ContinuousAmplitudes, amplitudes!
 
 include("basis.jl")
 include("model.jl")
@@ -34,5 +39,6 @@ include("poles.jl")
 include("tracking_poles.jl")
 include("amplitudes.jl")
 include("readout.jl")
+include("continuous.jl")
 
 end # module

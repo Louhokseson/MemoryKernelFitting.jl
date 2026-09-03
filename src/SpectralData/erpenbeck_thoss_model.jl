@@ -297,3 +297,79 @@ function fermi_crossing(m::ErpenbeckThossModel; bracket = (1.5, 3.0))
         end
     end
 end
+
+"""
+    markovian_friction(x, m::ErpenbeckThossModel, kT; halfwidth = 60kT, nodes = 401)
+
+The zero-frequency friction `Λ(x, 0)` of the wide-band model, in **mₑ/aut** — the same
+quantity the `Lambda_spectrum_*.h5` files store in row 1, evaluated analytically at any
+`x` in Å.
+
+```math
+Λ(x,0) = -π\\int \\mathrm{d}ϵ \\;
+  \\Big(\\partial_x h + (ϵ-h)\\frac{\\partial_x Γ}{Γ}\\Big)^2 A(ϵ)^2 \\,
+  \\frac{\\partial f}{\\partial ϵ},
+\\qquad
+A(ϵ) = \\frac{1}{π}\\frac{Γ/2}{(ϵ-h)^2 + (Γ/2)^2},
+\\qquad Γ = 2Δ,
+```
+
+with the Fermi level at `ϵ = 0`, which is where [`level_position`](@ref) already measures
+`h`. This is the wide-band single-level friction; it is the closed form
+`NQCCalculators.WideBandExact` evaluates, and the two agree to eight significant figures.
+
+# Why this exists
+[`ChebyshevAmplitudes`](@ref) factors the fitted amplitudes as
+`g_c(x) = √(Λ(x,0)) · ĝ_c(t(x))`, so **the envelope is needed wherever the amplitudes
+are**. Stored on the 254 graded nodes it is a table; a QGLE integrator asks for it at a
+continuously moving `x`. Interpolating the table costs `10%` (log-linear) to `4.5%`
+(log-cubic) at the midpoints of the coarse intervals beyond the crossing — an error of
+the same size as the fit's own, added for nothing, when the generating formula is three
+lines long. Verified: `1.3e-5 %` worst deviation across all 254 stored nodes.
+
+The warp `t(x)` of [`warp_coordinate`](@ref) is analytic already, so with this the
+stage-2 fit becomes a genuine function of `x` with no interpolation anywhere.
+
+# Units
+`x` in Å; `kT` and the returned value in atomic units. The derivatives
+[`dlevel_position`](@ref) and [`dhybridisation_width`](@ref) return Hartree **per Å** and
+are converted to per bohr here — this is the mixed unit their docstrings warn about, and
+it is squared in the integrand, so getting it wrong rescales `Λ` by `0.28`.
+
+# Quadrature
+Composite Simpson on `[-halfwidth, halfwidth]` with `nodes` points. Both factors are
+localised at the Fermi level — `-∂f/∂ϵ` has width `k_BT` and `A²` width `Δ ≈ 2k_BT` — and
+`-∂f/∂ϵ` cuts off as `e^{-β|ϵ|}`, so `60 k_BT` is a `e^{-60}` truncation. The defaults
+converge to `9e-6 %` against `nodes = 20001`; they are not tuned to a particular `x`.
+"""
+function markovian_friction(x, m::ErpenbeckThossModel, kT;
+                            halfwidth = 60kT, nodes::Integer = 401)
+    kT > 0 || throw(ArgumentError("the thermal energy must be positive, got $kT"))
+    halfwidth > 0 || throw(ArgumentError(
+        "the integration half-width must be positive, got $halfwidth"))
+    # Simpson needs an even number of intervals, i.e. an odd number of points.
+    nodes ≥ 3 && isodd(nodes) || throw(ArgumentError(
+        "Simpson needs an odd number of nodes ≥ 3, got $nodes"))
+
+    h = level_position(x, m)
+    Γ = 2 * hybridisation_width(x, m)                      # wide-band width, 2Δ
+    ∂h = dlevel_position(x, m) * BOHR_IN_ANGSTROM           # Ha/Å → Ha/bohr
+    ∂Γ = 2 * dhybridisation_width(x, m) * BOHR_IN_ANGSTROM
+    β = 1 / kT
+
+    # -∂f/∂ϵ at μ = 0, written as β/(4cosh²(βϵ/2)) rather than through `exp`: the
+    # equivalent e^{βϵ}/(1+e^{βϵ})² overflows to 0/Inf for |ϵ| ≳ 700kT, and the caller
+    # chooses the half-width.
+    function integrand(ϵ)
+        A = (Γ / 2) / (π * ((ϵ - h)^2 + (Γ / 2)^2))
+        return π * (∂h + (ϵ - h) * ∂Γ / Γ)^2 * A^2 * β / (4 * cosh(β * ϵ / 2)^2)
+    end
+
+    n = nodes - 1
+    dϵ = 2 * halfwidth / n
+    s = integrand(-halfwidth) + integrand(halfwidth)
+    for i in 1:(n - 1)
+        s += (isodd(i) ? 4 : 2) * integrand(-halfwidth + i * dϵ)
+    end
+    return s * dϵ / 3
+end

@@ -21,7 +21,7 @@ using ..Units: eV_to_hartree, hartree_to_eV, boltzmann_energy,
 export LambdaSpectrum, load_lambda_spectrum, trapezoid_weights, subsample_omega
 export ErpenbeckThossModel, level_position, hybridisation_width, coupling
 export dlevel_position, dhybridisation_width, diabatic_potentials
-export fermi_crossing, morse_zero_point
+export fermi_crossing, morse_zero_point, markovian_friction
 
 include("erpenbeck_thoss.jl")
 # After the loader: `ErpenbeckThossModel(::LambdaSpectrum)` needs the type.

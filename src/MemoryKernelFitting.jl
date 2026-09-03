@@ -67,7 +67,7 @@ using .SpectralData
 export LambdaSpectrum, load_lambda_spectrum, trapezoid_weights, subsample_omega
 export ErpenbeckThossModel, level_position, hybridisation_width, coupling
 export dlevel_position, dhybridisation_width, diabatic_potentials
-export fermi_crossing, morse_zero_point
+export fermi_crossing, morse_zero_point, markovian_friction
 
 include("PronySeriesFriction/PronySeriesFriction.jl")
 using .PronySeriesFriction
@@ -79,7 +79,8 @@ export TiedLaw, tied_seed, expand, N_TIED
 export GridAmplitudes, PolynomialAmplitudes, ChebyshevAmplitudes, warp_coordinate
 export fit_tag, BasisAmplitudes
 export n_configurations, mode_counts, amplitudes, parameters, parameters!
-export QGLEBlocks, qgle_blocks, gamma_matrix, exp_gamma22
+export QGLEBlocks, qgle_blocks, gamma_matrix, exp_gamma22, qgle_coupling!
+export ContinuousAmplitudes, amplitudes!
 
 include("Objective/Objective.jl")
 using .Objective

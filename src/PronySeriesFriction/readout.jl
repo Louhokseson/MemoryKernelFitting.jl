@@ -177,3 +177,40 @@ function exp_gamma22(ps::PoleSet, Δt)
     end
     return E
 end
+
+"""
+    qgle_coupling!(g, a, A) → g
+
+Fill the coupling vector `Γ̃₂,₁ = g` in place from one configuration's amplitudes,
+
+```math
+g = \\big(\\sqrt{a_1},…,\\sqrt{a_{K_R}},\\ \\sqrt{A_1},0,\\ …,\\ \\sqrt{A_{K_C}},0\\big)^T,
+```
+
+with `K_R = length(a)`, `K_C = length(A)` and `length(g) = K_R + 2K_C`.
+
+This is the only part of [`QGLEBlocks`](@ref) that moves when the configuration does, in
+regime (A): the poles are shared across `x`, so `Γ₂,₂` and `Σ̃₂` are built once and only
+`g` is rebuilt per step. Every element of `g` is written on every call — the zeros in the
+second slot of each pair included — so the same buffer can be reused without clearing it.
+
+The zeros are structural, not padding: they are what makes
+`gᵀ e^{-τR(α,β)} g = |g|² e^{-ατ}cos(βτ)`, one non-negative amplitude per `2×2` block.
+See [`qgle_blocks`](@ref) for the rest of the readout.
+"""
+function qgle_coupling!(g::AbstractVector, a::AbstractVector, A::AbstractVector)
+    K_R, K_C = length(a), length(A)
+    length(g) == K_R + 2K_C || throw(DimensionMismatch(
+        "g must have length K_R + 2K_C = $(K_R + 2K_C), got $(length(g))"))
+    for k in 1:K_R
+        a[k] ≥ 0 || throw(DomainError(a[k], "amplitudes must be non-negative"))
+        g[k] = sqrt(a[k])
+    end
+    for j in 1:K_C
+        A[j] ≥ 0 || throw(DomainError(A[j], "amplitudes must be non-negative"))
+        p = K_R + 2j - 1
+        g[p] = sqrt(A[j])
+        g[p+1] = zero(eltype(g))
+    end
+    return g
+end
