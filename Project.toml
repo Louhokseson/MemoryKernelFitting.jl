@@ -13,6 +13,8 @@ NQCDynamics = "36248dfb-79eb-4f4d-ab9c-e29ea5f33e14"
 NonNegLeastSquares = "b7351bd1-99d9-5c5d-8786-f205a815c4d7"
 Optim = "429524aa-4258-5aef-a3af-852621145aeb"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
+Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
+UnitfulAtomic = "a7773ee8-282e-5fa2-be4e-bd808c38a91a"
 
 [compat]
 CairoMakie = "0.15.13"
@@ -22,6 +24,8 @@ HDF5 = "0.17.3"
 NonNegLeastSquares = "0.4.1"
 Optim = "1.13, 2"
 StatsBase = "0.34.13"
+Unitful = "1.28.0"
+UnitfulAtomic = "1.0"
 julia = "1.10"
 
 [extras]
