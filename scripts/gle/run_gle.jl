@@ -87,22 +87,33 @@ using Statistics
 # Settings
 # ------------------------------------------------------------------------------------
 
-# Γ and the incident energy come from the command line when this is one point of a
-# sweep, and fall back to the defaults when it is run by hand:
+# Γ, the incident energy and the time step come from the command line when this is one
+# point of a sweep, and fall back to the defaults when it is run by hand:
 #
-#   julia --project=. scripts/gle/run_gle.jl --gamma 0.05 --energy 2.5
+#   julia --project=. scripts/gle/run_gle.jl --gamma 0.05 --energy 2.5 --dt 0.25
 #
 # `--force` re-runs a combination whose artefact already exists; without it the run is
 # skipped, which is what makes the whole sweep re-submittable.
 #
+# The step is part of the artefact name, so a step sweep never overwrites anything. The
+# default 0.5 aut is set by two timescales the integrator has to resolve, both far below
+# the 1400 aut round trip: the molecule clears the 0.05 Å-wide friction peak at the
+# crossing in 10.8 aut, and the fastest modes of the fitted kernel decay in 2.3 aut and
+# oscillate with a 2.9 aut period (`α = 12 eV`, `β = 60 eV` in the stage-2 ladder). At
+# 0.5 aut that is 22 steps across the peak and 6 per period of the fastest mode; 2 aut
+# crosses the peak in 5 steps and under-resolves the fast pair outright. Keep the step
+# a divisor of `T_FINAL` so the save grid ends on it.
+#
 # Same hand-rolled loop as `run_Markovian_CPA_et.jl` — an unrecognised argument is
 # skipped rather than fatal, so extra flags from a batch script do no harm.
-let _gamma = 0.1, _energy = 2.0, _force = false, i = 1
+let _gamma = 0.1, _energy = 2.0, _dt = 0.5, _force = false, i = 1
     while i <= length(ARGS)
         if ARGS[i] == "--gamma" && i < length(ARGS)
             _gamma = parse(Float64, ARGS[i+1]); i += 2
         elseif ARGS[i] == "--energy" && i < length(ARGS)
             _energy = parse(Float64, ARGS[i+1]); i += 2
+        elseif ARGS[i] == "--dt" && i < length(ARGS)
+            _dt = parse(Float64, ARGS[i+1]); i += 2
         elseif ARGS[i] == "--force"
             _force = true; i += 1
         else
@@ -111,6 +122,7 @@ let _gamma = 0.1, _energy = 2.0, _force = false, i = 1
     end
     global const GAMMA_EV = _gamma
     global const E_INC_EV = _energy
+    global const MD_DT = _dt
     global const FORCE = _force
 end
 
@@ -118,9 +130,11 @@ const T_K = 300.0            # surface temperature: sets the noise, not the beam
 const X_START = 5.0          # Å — launch point, where Λ(x,0) ≈ 1e-11 and the coupling is dead
 const N_TRAJ = 400
 const T_FINAL = 4_000.0      # aut; the round trip 5 → 1.4 → 5 Å takes ~1400 aut
-const MD_DT = 0.5            # aut. The peak transit is 10.8 aut at these speeds, so the
-                             # step has to resolve it: dt = 2 would cross it in 5 steps.
 const SEED = 20260902
+
+MD_DT > 0 || error("--dt must be positive, got $MD_DT")
+isinteger(T_FINAL / MD_DT) ||
+    @warn "T_FINAL / dt is not an integer: the last save falls short of T_FINAL" MD_DT T_FINAL
 
 """
     find_fit(Γ_eV) → path or nothing
@@ -338,8 +352,10 @@ h5open(outfile, "w") do f
             g[string(k)] = getfield(r, k)
         end
         g["per_traj_loss"] = r.per_traj_loss
-        # Subsample the mean trajectory: 8001 points is more than any figure needs.
-        keep = 1:20:length(r.t)
+        # Subsample the mean trajectory to one point per 10 aut whatever the step: 8001
+        # points at dt = 0.5 is more than any figure needs, and a step sweep should not
+        # change the saved grid.
+        keep = 1:max(1, round(Int, 10 / MD_DT)):length(r.t)
         g["t_aut"] = r.t[keep]
         g["x_mean_bohr"] = r.xt[keep]
         g["x_sd_bohr"] = r.x_sd[keep]
