@@ -1,0 +1,156 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 612" width="1180" role="img" aria-labelledby="mm-title mm-desc">
+<title id="mm-title">From a fitted Prony series to GLE dynamics</title>
+<desc id="mm-desc">MemoryKernelFitting's modules produce a stage-2 Chebyshev fit file. The adapter in scripts/gle/prony_memory.jl reads it into a PronyMemory memory model and builds a Simulation of GLE_MDEF. Every integrator step, NQCDynamics calls the adapter's GLE_friction! at the half-step position, which rebuilds the coupling vector through qgle_coupling! and writes it into the drift matrix Gamma.</desc>
+<style>
+text { font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.ttl { font-size: 12.5px; font-weight: 600; }
+.ln { font-size: 11px; fill: #E6E9EF; }
+.lbl { font-size: 11px; fill: #97A0AF; }
+.lane { font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+        font-size: 12.5px; font-weight: 600; }
+.lane-sub { font-size: 11px; fill: #97A0AF; }
+.fit { fill: #E2A65A; } .bridge { fill: #B996EC; } .dyn { fill: #63B6D3; } .ink { fill: #E6E9EF; }
+.box { fill: #161B22; stroke-width: 1.25; }
+.s-fit { stroke: #E2A65A; } .s-bridge { stroke: #B996EC; } .s-dyn { stroke: #63B6D3; }
+.s-data { stroke: #97A0AF; stroke-dasharray: 5 4; }
+.edge { fill: none; stroke: #97A0AF; stroke-width: 1.25; }
+.edge-hot { fill: none; stroke: #B996EC; stroke-width: 2; }
+</style>
+<defs>
+<marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#97A0AF"/></marker>
+<marker id="ahh" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#B996EC"/></marker>
+</defs>
+<rect x="1" y="1" width="1178" height="610" rx="8" fill="#0D1117" stroke="#2C323D"/>
+<rect class="box s-fit" x="150" y="40" width="184" height="100" rx="4"/>
+<rect class="box s-fit" x="358" y="40" width="184" height="100" rx="4"/>
+<rect class="box s-fit" x="566" y="40" width="184" height="100" rx="4"/>
+<rect class="box s-fit" x="774" y="40" width="184" height="100" rx="4"/>
+<rect class="box s-data" x="982" y="40" width="184" height="100" rx="4"/>
+<rect class="box s-bridge" x="150" y="250" width="184" height="100" rx="4"/>
+<rect class="box s-bridge" x="358" y="250" width="184" height="100" rx="4"/>
+<rect class="box s-bridge" x="566" y="250" width="184" height="100" rx="4"/>
+<rect class="box s-bridge" x="774" y="250" width="184" height="100" rx="4"/>
+<rect class="box s-bridge" x="982" y="250" width="184" height="100" rx="4"/>
+<rect class="box s-dyn" x="150" y="460" width="184" height="100" rx="4"/>
+<rect class="box s-dyn" x="358" y="460" width="184" height="100" rx="4"/>
+<rect class="box s-dyn" x="566" y="460" width="392" height="100" rx="4"/>
+<rect class="box s-dyn" x="982" y="460" width="184" height="100" rx="4"/>
+<line class="edge" x1="334" y1="90" x2="358" y2="90" marker-end="url(#ah)"/>
+<line class="edge" x1="542" y1="90" x2="566" y2="90" marker-end="url(#ah)"/>
+<line class="edge" x1="750" y1="90" x2="774" y2="90" marker-end="url(#ah)"/>
+<line class="edge" x1="958" y1="90" x2="982" y2="90" marker-end="url(#ah)"/>
+<line class="edge" x1="242" y1="140" x2="242" y2="250" marker-end="url(#ah)"/>
+<line class="edge-hot" x1="450" y1="140" x2="450" y2="250" marker-end="url(#ahh)"/>
+<polyline class="edge" points="500,140 500,172 846,172 846,250" marker-end="url(#ah)"/>
+<polyline class="edge" points="1074,140 1074,196 886,196 886,250" marker-end="url(#ah)"/>
+<line class="edge" x1="242" y1="350" x2="242" y2="460" marker-end="url(#ah)"/>
+<line class="edge-hot" x1="450" y1="460" x2="450" y2="350" marker-end="url(#ahh)"/>
+<line class="edge" x1="658" y1="350" x2="658" y2="460" marker-end="url(#ah)"/>
+<line class="edge" x1="866" y1="350" x2="866" y2="460" marker-end="url(#ah)"/>
+<line class="edge" x1="1074" y1="350" x2="1074" y2="460" marker-end="url(#ah)"/>
+<line class="edge" x1="542" y1="510" x2="566" y2="510" marker-start="url(#ah)" marker-end="url(#ah)"/>
+<polyline class="edge" points="1074,560 1074,598 450,598 450,560" marker-end="url(#ah)"/>
+<text class="lane fit" x="12" y="76">MemoryKernel</text>
+<text class="lane fit" x="12" y="92">Fitting.jl</text>
+<text class="lane-sub" x="12" y="108">src/ (package)</text>
+<text class="lane bridge" x="12" y="286">Bridge</text>
+<text class="lane-sub" x="12" y="302">scripts/gle/</text>
+<text class="lane-sub" x="12" y="317">prony_memory.jl</text>
+<text class="lane dyn" x="12" y="496">NQCDynamics.jl</text>
+<text class="lane-sub" x="12" y="512">GLE_MDEF branch</text>
+<text class="lane-sub" x="12" y="527">DynamicsMethods/</text>
+<text class="ttl fit" x="160" y="62">SpectralData</text>
+<text class="ln" x="160" y="82">load_lambda_spectrum</text>
+<text class="ln" x="160" y="97">ErpenbeckThossModel</text>
+<text class="ln" x="160" y="112">h(x), Δ(x)</text>
+<text class="ln" x="160" y="127">markovian_friction(x)</text>
+<text class="ttl fit" x="368" y="62">PronySeriesFriction</text>
+<text class="ln" x="368" y="82">PoleSet(λ, α, β)</text>
+<text class="ln" x="368" y="97">ContinuousAmplitudes</text>
+<text class="ln" x="368" y="112">qgle_blocks → Γ₂₂</text>
+<text class="ln" x="368" y="127">qgle_coupling! → g, a₀</text>
+<text class="ttl fit" x="576" y="62">Objective</text>
+<text class="ln" x="576" y="82">design_matrix</text>
+<text class="ln" x="576" y="97">residual_scales</text>
+<text class="ln" x="576" y="112">configuration_weights</text>
+<text class="ln" x="576" y="127">objective_value → J</text>
+<text class="ttl fit" x="784" y="62">Fitting</text>
+<text class="ln" x="784" y="82">fit_amplitudes</text>
+<text class="lbl" x="784" y="97">  stage 1: NNLS per x</text>
+<text class="ln" x="784" y="112">fit_basis_report</text>
+<text class="lbl" x="784" y="127">  stage 2: Chebyshev</text>
+<text class="ttl ink" x="992" y="62">data/fits/*.h5</text>
+<text class="ln" x="992" y="82">prony_stage2Cheby_…</text>
+<text class="ln" x="992" y="97">C_cheb</text>
+<text class="ln" x="992" y="112">lambda/alpha/beta_Ha</text>
+<text class="ln" x="992" y="127">K_R, K_C</text>
+<text class="lbl" x="346" y="30" text-anchor="middle">h, Δ, Λ(x,0)</text>
+<text class="lbl" x="554" y="30" text-anchor="middle">Λ_θ(x, ω)</text>
+<text class="lbl" x="762" y="30" text-anchor="middle">J(θ)</text>
+<text class="lbl" x="970" y="30" text-anchor="middle">writes (scripts/fitting)</text>
+<text class="lbl" x="250" y="200">markovian_friction(x)</text>
+<text class="lbl bridge" x="458" y="226">qgle_coupling!(x) → g, a₀</text>
+<text class="lbl" x="673" y="165" text-anchor="middle">ContinuousAmplitudes, qgle_blocks → Γ₂₂</text>
+<text class="lbl" x="980" y="189" text-anchor="middle">h5open, once</text>
+<text class="ttl bridge" x="160" y="272">PES + MDEF ref.</text>
+<text class="ln" x="160" y="292">GroundAdiabat</text>
+<text class="ln" x="160" y="307">erpenbeck_thoss_neutral</text>
+<text class="ln" x="160" y="322">MarkovianFriction</text>
+<text class="lbl" x="160" y="337">  → Λ(x,0) for MDEF</text>
+<text class="ttl bridge" x="368" y="272">GLE_friction!</text>
+<text class="ln" x="368" y="292">x = r · BOHR_IN_ANGSTROM</text>
+<text class="ln" x="368" y="307">Γ₁₁ = a₀ / m</text>
+<text class="ln" x="368" y="322">Γ₁₂ = −gᵀ / √m</text>
+<text class="ln" x="368" y="337">Γ₂₁ =  g  / √m</text>
+<text class="ttl bridge" x="576" y="272">prony_simulation</text>
+<text class="ln" x="576" y="292">Simulation{GLE_MDEF}</text>
+<text class="ln" x="576" y="307">method.Λ .= Γ₂₂</text>
+<text class="ln" x="576" y="322">Γ[2:end,2:end] .= Γ₂₂</text>
+<text class="lbl" x="576" y="337">  requires d = 1</text>
+<text class="ttl bridge" x="784" y="272">PronyMemory</text>
+<text class="ln" x="784" y="292">&lt;: MemoryModel</text>
+<text class="ln" x="784" y="307">c   g(x) buffer, m = 43</text>
+<text class="ln" x="784" y="322">Γ₂₂ fixed (regime A)</text>
+<text class="ln" x="784" y="337">model::Continuous…</text>
+<text class="ttl bridge" x="992" y="272">SeededIC</text>
+<text class="ln" x="992" y="292">seed_auxiliaries!</text>
+<text class="ln" x="992" y="307">s(0) ~ N(0, kT·I)</text>
+<text class="lbl" x="992" y="322">  keyed on trajectory i</text>
+<text class="ln" x="992" y="337">writes method.s</text>
+<text class="lbl" x="250" y="400">ClassicalModel,</text>
+<text class="lbl" x="250" y="414">FrictionProvider</text>
+<text class="lbl bridge" x="458" y="400">calls f.g every step</text>
+<text class="lbl bridge" x="458" y="414">at the midpoint q(k+½)</text>
+<text class="lbl" x="666" y="400">Simulation{GLE_MDEF}</text>
+<text class="lbl" x="666" y="414">fills Λ, Γ₂₂ once</text>
+<text class="lbl" x="874" y="388">&lt;: MemoryModel</text>
+<text class="lbl" x="874" y="402">(dispatch key)</text>
+<text class="lbl" x="1066" y="428" text-anchor="end">sample_distribution</text>
+<text class="lbl" x="1066" y="442" text-anchor="end">on each copy, index i</text>
+<text class="ttl dyn" x="160" y="482">NQCModels</text>
+<text class="lbl" x="160" y="502">+ NQCCalculators</text>
+<text class="ln" x="160" y="517">ClassicalModel</text>
+<text class="ln" x="160" y="532">FrictionProvider</text>
+<text class="ln" x="160" y="547">cache, update_cache!</text>
+<text class="ttl dyn" x="368" y="482">IntegrationAlgorithms</text>
+<text class="ln" x="368" y="502">GLE_BAOAB  B·A·O·A·B</text>
+<text class="ln" x="368" y="517">GLE_step_O!: e^(−ΔtΓ)</text>
+<text class="ln" x="368" y="532">S Sᵀ = I − F Fᵀ</text>
+<text class="lbl" x="368" y="547">exact OU step</text>
+<text class="ttl dyn" x="576" y="482">ClassicalMethods</text>
+<text class="lbl" x="576" y="502">gle_mdef.jl</text>
+<text class="ln" x="576" y="517">GLE_MDEF{m,T,MM}</text>
+<text class="ln" x="576" y="532">Γ, Λ, C, s live here</text>
+<text class="ln" x="576" y="547">create_problem</text>
+<text class="lbl" x="770" y="502">mdef.jl</text>
+<text class="ln" x="770" y="517">MDEF, friction!</text>
+<text class="ln" x="770" y="532">ConstantProny</text>
+<text class="ln" x="770" y="547">ConfigurationDependent…</text>
+<text class="ttl dyn" x="992" y="482">Ensembles</text>
+<text class="ln" x="992" y="502">run_dynamics</text>
+<text class="ln" x="992" y="517">OrderedSelection</text>
+<text class="ln" x="992" y="532">sample_distribution</text>
+<text class="ln" x="992" y="547">EnsembleProblem</text>
+<text class="lbl" x="554" y="453" text-anchor="middle">reads Γ, writes s</text>
+<text class="lbl" x="762" y="591" text-anchor="middle">solve(EnsembleProblem, GLE_BAOAB) · sim deep-copied per trajectory</text>
+</svg>

@@ -83,7 +83,7 @@ K(x,\tau)
 | **QGLE readout** | Extended-variable blocks and the closed-form block exponential through <code>qgle_blocks</code> and <code>exp_gamma22</code> |
 | **Spectral data** | Atomic-unit loading of the configuration-resolved spectra, graded-grid quadrature weights, and logarithmic frequency subsampling |
 | **Validation** | Tests for symmetry, resonance onset, Markovian limits, dimension checks, numerical kernel–spectrum consistency, and fluctuation–dissipation structure |
-| **Fitting pipeline** | Weighted objective and fixed-ladder per-configuration NNLS implemented; the coupled roughness solve and optional diagnostic VARPRO remain planned |
+| **Fitting pipeline** | Weighted objective, fixed-ladder per-configuration NNLS, and the stage-2 basis compression; the $\mu$-coupled roughness solve is available in the objective but not yet exercised, as production runs use $\mu=0$ |
 
 </div>
 
@@ -139,19 +139,21 @@ than through the regular memory convolution.
 
 <div align="justify">
 
-The model, data, objective, and fixed-ladder stage-1 fit are implemented and tested:
+The model, data, objective, and both fitting stages are implemented and tested:
 spectral and time-domain evaluation, the two basis functions, pole ladders, the three
 configuration-dependent amplitude representations, QGLE readout, atomic-unit spectral
-data loading, the weighted objective, and independent per-configuration NNLS.
+data loading, the weighted objective, independent per-configuration NNLS for stage 1,
+and the basis compression of stage 2. The continuous readout evaluates a stage-2 fit at
+arbitrary $x$, which is what [From Fit to Dynamics](#from-fit-to-dynamics) runs on.
 
 </div>
 
 <div align="justify">
 
-The remaining fitting work is the $\mu$-coupled roughness solve and the stage-2
-coefficient fit that compresses the grid amplitudes into a smooth representation.
-Outer variable projection is an optional pole diagnostic rather than part of the
-fixed-ladder production path.
+The remaining fitting work is the $\mu$-coupled roughness solve: the penalty is
+implemented in the objective, but production fits run at $\mu=0$, with the columns
+decoupled. Outer variable projection is implemented as an optional pole diagnostic
+rather than as part of the fixed-ladder production path.
 
 Design decisions with lasting consequences are recorded in
 <a href="docs/design/"><code>docs/design/</code></a>, and progress is logged in
@@ -167,6 +169,7 @@ Design decisions with lasting consequences are recorded in
 |------|----------|
 | [<code>src/</code>](src) | Package implementation and public model-evaluation API |
 | [<code>test/</code>](test) | Unit and numerical cosine-transform consistency tests |
+| [<code>scripts/</code>](scripts) | Fitting drivers, and the NQCDynamics adapter and GLE runs in [<code>scripts/gle/</code>](scripts/gle) |
 | [<code>docs/PronySeries/</code>](docs/PronySeries) | QGLE derivation, optimisation problem, and theory handover notes |
 | [<code>assets/</code>](assets) | Static and animated package logos plus the animation generator |
 | [<code>data/</code>](data) | Local spectral and simulation data; large outputs are not tracked |
@@ -295,6 +298,159 @@ a global optimum.
 
 </div>
 
+## From Fit to Dynamics
+
+<div align="justify">
+
+Fitting ends with one HDF5 file: the shared pole ladder $(\lambda,\alpha,\beta)$ and the
+Chebyshev coefficients of $\boldsymbol g(x)$. Running dynamics with it is
+[NQCDynamics.jl](https://github.com/NQCD/NQCDynamics.jl)'s job. The two packages meet in a
+single adapter, <code>scripts/gle/prony_memory.jl</code>, which is deliberately outside
+<code>src/</code>: a fitting package has no business depending on an SDE integrator.
+The adapter wraps the fit as a <code>PronyMemory &lt;: MemoryModel</code>, and everything
+after that is stock <code>run_dynamics</code>.
+
+</div>
+
+<div align="center">
+
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/module-map-dark.svg" />
+    <source media="(prefers-color-scheme: light)" srcset="./assets/module-map.svg" />
+    <img src="./assets/module-map.svg" width="900"
+         alt="Module map: MemoryKernelFitting's modules produce a stage-2 fit file; the adapter in scripts/gle/prony_memory.jl reads it into a PronyMemory model and builds a Simulation{GLE_MDEF}; NQCDynamics calls the adapter's GLE_friction! at each half-step." />
+  </picture>
+
+</div>
+
+<div align="justify">
+
+Only two modules are live at run time. <code>SpectralData</code> supplies the analytic
+envelope $\sqrt{\Lambda(x,0)}$ and the warp $t(x)$, and
+<code>PronySeriesFriction</code> evaluates the Chebyshev readout. The violet path is the
+only work done per step: the integrator asks for the friction at the half-step position,
+and <code>qgle_coupling!</code> rebuilds $\boldsymbol g(x)$ into the drift matrix. In
+regime (A) the poles are shared across configurations, so
+$\boldsymbol\Gamma_{2,2}$ and $\widetilde{\boldsymbol\Sigma}_2$ are built once and never
+touched again — which is precisely why the realised kernel is exactly the fitted one.
+
+</div>
+
+### The gle-BAOAB Integrator
+
+<div align="justify">
+
+The extended system is integrated by the Hamiltonian–Ornstein–Uhlenbeck splitting of
+Sachs: the force (B) and drift (A) half-steps surround an <strong>exact</strong>
+Ornstein–Uhlenbeck step (O) for the linear part at frozen configuration. Writing
+$n$ physical degrees of freedom, $m$ auxiliary variables and
+$\boldsymbol R^k\sim\mathcal{N}(0,\boldsymbol I_{n+m})$, one step of
+$(q^k,p^k,s^k)\mapsto(q^{k+1},p^{k+1},s^{k+1})$ is
+
+</div>
+
+<div align="center">
+
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/gle-baoab-dark.svg" />
+    <source media="(prefers-color-scheme: light)" srcset="./assets/gle-baoab.svg" />
+    <img src="./assets/gle-baoab.svg" width="820"
+         alt="gle-BAOAB, one step: B, a force half-step; A, a drift half-step; O, an exact Ornstein-Uhlenbeck step for the momenta and auxiliary variables at the frozen half-step configuration; then A and B again." />
+  </picture>
+
+</div>
+
+<details>
+<summary>The same step as LaTeX</summary>
+
+```math
+\begin{aligned}
+\textbf{B}\quad
+& p^{k+1/2} = p^k - \tfrac{\Delta t}{2}\nabla U(q^k), \\
+\textbf{A}\quad
+& q^{k+1/2} = q^k + \tfrac{\Delta t}{2}\boldsymbol M^{-1}p^{k+1/2}, \\
+\textbf{O}\quad
+& \widetilde{\boldsymbol\Gamma}
+ = \widetilde{\boldsymbol\Gamma}(q^{k+1/2}), \qquad
+\boldsymbol F = e^{-\Delta t\widetilde{\boldsymbol\Gamma}}, \qquad
+\boldsymbol S\boldsymbol S^T
+ = \widetilde{\boldsymbol Q}
+ - \boldsymbol F\widetilde{\boldsymbol Q}\boldsymbol F^T, \\
+& \boldsymbol z = \left(\boldsymbol M^{-1/2}p^{k+1/2},\, s^k\right), \qquad
+\boldsymbol z \leftarrow
+ \boldsymbol F\boldsymbol z + \beta^{-1/2}\boldsymbol S\boldsymbol R^k, \\
+& \left(\hat p^{k+1/2},\, s^{k+1}\right)
+ = \left(\boldsymbol M^{1/2}\boldsymbol z_1,\, \boldsymbol z_2\right), \\
+\textbf{A}\quad
+& q^{k+1} = q^{k+1/2}
+ + \tfrac{\Delta t}{2}\boldsymbol M^{-1}\hat p^{k+1/2}, \\
+\textbf{B}\quad
+& p^{k+1} = \hat p^{k+1/2} - \tfrac{\Delta t}{2}\nabla U(q^{k+1}),
+\end{aligned}
+```
+
+The figure is typeset from [<code>assets/gle_baoab_algorithm.tex</code>](assets/gle_baoab_algorithm.tex);
+rebuild both themes with [<code>assets/build_algorithm.sh</code>](assets/build_algorithm.sh).
+
+</details>
+
+<div align="justify">
+
+With $\widetilde{\boldsymbol Q}=\boldsymbol I$ the noise factor is any $\boldsymbol S$ with
+$\boldsymbol S\boldsymbol S^T=\boldsymbol I-\boldsymbol F\boldsymbol F^T$. That covariance
+can be positive <em>semi</em>-definite rather than definite — without a white part $a_0$,
+noise reaches the momenta only through the coupling, and then at order $\Delta t^{3/2}$ —
+so a pivoted Cholesky factorisation, truncated at the numerical rank, is the right tool.
+
+</div>
+
+<div align="justify">
+
+Three properties matter for this package. The O-step is the exact solution of the linear
+SDE, so it is unconditionally stable and $\Delta t$ is limited by the A/B part alone. Each
+sub-map preserves the extended Gibbs measure, and the symmetric composition is second-order
+accurate for ergodic averages. And in the white-noise limit the scheme reduces to BAOAB for
+Langevin dynamics with friction $\Lambda(x,0)$ — the consistency requirement that ties the
+fitted GLE back to standard MDEF, and the reason
+<code>markovian_friction</code> is anchored into the objective.
+
+</div>
+
+<div align="justify">
+
+<strong>Two conventions</strong> are worth stating, because the scheme is written above
+with the mass matrix restored. Sachs sets $\boldsymbol M=\boldsymbol I$ throughout §4.1,
+so the mass weighting here follows the flow maps rather than the printed algorithm: the
+O-step acts on $\boldsymbol z=(\boldsymbol M^{-1/2}p, s)$, and the noise carries the
+$\beta^{-1/2}$ of the exact OU step. This package writes the QGLE with unweighted momenta,
+so the adapter applies $1/\sqrt{m}$ to the coupling and $1/m$ to the white part exactly
+once, when it fills $\widetilde{\boldsymbol\Gamma}$.
+
+</div>
+
+<div align="left">
+
+| Piece of the step | Where it lives |
+|---|---|
+| $\widetilde{\boldsymbol\Gamma}$, $\widetilde{\boldsymbol\Sigma}_2$ from a fit | <code>qgle_blocks</code>, <code>gamma_matrix</code> (this package) |
+| $e^{-\Delta t\boldsymbol\Gamma_{2,2}}$ in closed form | <code>exp_gamma22</code> (this package) |
+| $\boldsymbol g(x)$ per step, allocation-free | <code>qgle_coupling!</code> (this package) |
+| B, A, O composition and the pivoted Cholesky | <code>GLE_BAOAB</code>, <code>GLE_step_O!</code> (NQCDynamics.jl) |
+
+</div>
+
+<div align="justify">
+
+The algorithm is scheme (B.1) of Sachs' thesis, assembled from the H–OU splitting of §4.1
+with the exact Ornstein–Uhlenbeck step of Eq. (4.7); §4.7 covers the configuration-dependent
+case, where the matrix exponential and the factorisation must be recomputed each step. The
+configuration-dependent QGLE it integrates, and the fluctuation–dissipation condition that
+makes the extended Gibbs measure invariant, are Eq. (20) and Eqs. (34)–(35) of Leimkuhler
+and Sachs (2019). The block conventions follow
+[GLEFrictionFit.jl](https://github.com/MatthiasSachs/GLEFrictionFit.jl).
+
+</div>
+
 ## Documentation
 
 The detailed theory and optimisation specification live in
@@ -311,8 +467,14 @@ The detailed theory and optimisation specification live in
 This package builds on the quasi-Markovian GLE and underdamped memory-kernel
 constructions described in:
 
-- Sachs, *PhD thesis* (University of Edinburgh, 2017), Eq. (3.7) and §4.7.2.
-- Leimkuhler and Sachs (2019), *Ergodic Properties of Quasi-Markovian GLEs with Configuration Dependent Noise*.
+- Sachs, *PhD thesis* (University of Edinburgh, 2017): Eq. (3.7) and §4.7.2 for the kernel
+  and the oscillatory realisation; §4.1 and Eq. (4.7) for the H–OU splitting and the exact
+  Ornstein–Uhlenbeck step; Appendix B, scheme (B.1), for the gle-BAOAB algorithm.
+- Leimkuhler and Sachs (2019), *Ergodic Properties of Quasi-Markovian Generalized Langevin
+  Equations with Configuration Dependent Noise and Non-conservative Force*, Springer
+  Proceedings in Mathematics & Statistics **282**,
+  [doi:10.1007/978-3-030-15096-9_8](https://doi.org/10.1007/978-3-030-15096-9_8):
+  Eq. (20) for the configuration-dependent QGLE, Eqs. (34)–(35) for the FDT pairing.
 - Stella, Lorenz, and Kantorovich, *Physical Review B* **89**, 134303 (2014).
 - Lei, Baker, and Li, *PNAS* **113**, 14183 (2016).
 

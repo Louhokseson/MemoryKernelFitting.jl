@@ -1,0 +1,81 @@
+% gle-BAOAB, one step: the algorithm figure used in README.md.
+%
+% Scheme (B.1) of Sachs' thesis (Appendix B), assembled from the H-OU splitting of
+% section 4.1 with the exact Ornstein-Uhlenbeck step of Eq. (4.7). Written with the
+% mass matrix restored: section 4.1 sets M = I throughout.
+%
+% Build both themes (from this directory):
+%
+%   pdflatex -jobname=gle-baoab            gle_baoab_algorithm.tex
+%   pdflatex -jobname=gle-baoab-dark "\def\DARKTHEME{}\input{gle_baoab_algorithm}"
+%   dvisvgm --pdf --no-fonts --exact --output=gle-baoab.svg      gle-baoab.pdf
+%   dvisvgm --pdf --no-fonts --exact --output=gle-baoab-dark.svg gle-baoab-dark.pdf
+%
+% --no-fonts converts glyphs to paths, so the SVG renders identically everywhere:
+% GitHub serves it through <img>, where external font loading is blocked.
+%
+\documentclass[border=10pt]{standalone}
+
+\usepackage[T1]{fontenc}
+\usepackage{newtxtext,newtxmath}
+\usepackage{inconsolata}
+\usepackage{amsmath}
+\usepackage{xcolor}
+\usepackage[linesnumbered, ruled, vlined]{algorithm2e}
+
+% Palette shared with assets/module_map.py, so the README figures read as one set.
+\ifdefined\DARKTHEME
+  \definecolor{ink}{HTML}{E6E9EF}
+  \definecolor{muted}{HTML}{97A0AF}
+  \definecolor{accent}{HTML}{63B6D3}
+  \definecolor{bg}{HTML}{0D1117}
+\else
+  \definecolor{ink}{HTML}{1B2130}
+  \definecolor{muted}{HTML}{5F6A7D}
+  \definecolor{accent}{HTML}{1D6A87}
+  \definecolor{bg}{HTML}{FFFFFF}
+\fi
+
+\SetAlgorithmName{gle-BAOAB}{}{}
+\renewcommand{\thealgocf}{}                     % no float number: this stands alone
+\SetAlgoCaptionSeparator{\,--\,}
+\DontPrintSemicolon
+% \SetNlSty wraps the number in a ONE-argument macro, so the colour needs its own.
+\newcommand{\nlstyle}[1]{\textcolor{muted}{#1}}
+\SetNlSty{nlstyle}{}{}                          % line numbers recede
+\SetCommentSty{textnormal}
+\SetKwInput{KwInit}{Initialise}
+\newcommand{\step}[1]{\textcolor{accent}{\textbf{#1}}}
+\newcommand{\note}[1]{\textcolor{muted}{\small #1}}
+
+\begin{document}
+% \pagecolor, not \colorbox: algorithm2e cannot be scanned as a box argument. The
+% standalone page is the cropped figure plus its border, so this paints the whole card.
+\pagecolor{bg}
+\begin{minipage}{15.4cm}
+\color{ink}
+\begin{algorithm}[H]
+\caption{one step of the quasi-Markovian GLE}
+\KwIn{$q^k,\; p^k,\; s^k$;\quad step $\Delta t$;\quad inverse temperature $\beta$;\quad
+      $R^k \sim \mathcal{N}(0, I_{n+m})$}
+% An input-style line, because the bath is seeded once before the loop rather than
+% stepped: \SetKwInput lines are never numbered, whereas \nonl does not hold here.
+\KwInit{$s^0 \sim \mathcal{N}(0, \beta^{-1} I_m)$
+        \hfill\note{stationary random force}}
+\BlankLine
+$p^{k+1/2} \leftarrow p^k - \tfrac{\Delta t}{2}\nabla U(q^k)$ \hfill\step{B}\;
+$q^{k+1/2} \leftarrow q^k + \tfrac{\Delta t}{2} M^{-1} p^{k+1/2}$ \hfill\step{A}\;
+\BlankLine
+$\widetilde{\Gamma} \leftarrow \widetilde{\Gamma}(q^{k+1/2})$,\quad
+$F \leftarrow e^{-\Delta t \widetilde{\Gamma}}$ \hfill\step{O}\;
+\quad take any $S$ with $S S^{\mathsf{T}} = \widetilde{Q} - F \widetilde{Q} F^{\mathsf{T}}$
+      \hfill\note{$\widetilde{Q} = I$; pivoted Cholesky}\;
+\quad $z \leftarrow \bigl(M^{-1/2} p^{k+1/2},\; s^k\bigr)$\;
+\quad $z \leftarrow F z + \beta^{-1/2} S R^k$\;
+\quad $\bigl(\hat{p}^{k+1/2},\; s^{k+1}\bigr) \leftarrow \bigl(M^{1/2} z_1,\; z_2\bigr)$\;
+\BlankLine
+$q^{k+1} \leftarrow q^{k+1/2} + \tfrac{\Delta t}{2} M^{-1} \hat{p}^{k+1/2}$ \hfill\step{A}\;
+$p^{k+1} \leftarrow \hat{p}^{k+1/2} - \tfrac{\Delta t}{2}\nabla U(q^{k+1})$ \hfill\step{B}\;
+\end{algorithm}
+\end{minipage}
+\end{document}
