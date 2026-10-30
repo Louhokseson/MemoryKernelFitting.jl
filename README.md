@@ -78,7 +78,7 @@ K(x,\tau)
 | **Basis functions** | <code>lorentzian</code> and <code>mirrored_lorentzian</code>, implemented as an explicit one-sided cosine-transform pair |
 | **Resonant modes** | Real $2\times2$ rotation blocks for complex-conjugate poles $\alpha\pm i\beta$, allowing peaks at nonzero frequency |
 | **FDT-safe parameterisation** | Non-negative amplitudes represented structurally as squares, with stable positive decay rates |
-| **Pole ladders** | Log-spaced and uniform fixed ladders with the identifiability box of the frequency window, through <code>log_ladder</code> and <code>uniform_ladder</code> |
+| **Pole ladders** | Log-spaced, uniform and band-split fixed ladders, with real rates and the identifiability box of the frequency window, through <code>log_ladder</code>, <code>uniform_ladder</code> and <code>split_ladder</code> |
 | **Configuration dependence** | <code>GridAmplitudes</code> for the convex stage, plus polynomial and warped-Chebyshev bases for the smooth stage, behind one <code>AmplitudeModel</code> interface |
 | **QGLE readout** | Extended-variable blocks and the closed-form block exponential through <code>qgle_blocks</code> and <code>exp_gamma22</code> |
 | **Spectral data** | Atomic-unit loading of the configuration-resolved spectra, graded-grid quadrature weights, and logarithmic frequency subsampling |
@@ -289,12 +289,25 @@ Rates are shared across configurations while amplitudes vary with $x$. This is t
 regime in which the two-time path-ordered kernel collapses exactly to a Prony series in
 the lag. Allowing poles to track $x$ instead is an adiabatic approximation that fails
 most strongly near the crossing, where
-$\tau_{\mathrm{mem}}/\tau_{\mathrm{conf}}\approx34$ even at 300 K. A tiling argument
-gives $K_C=30$ pairs ($m=60$), but the measured fixed-ladder fit plateaus near
-$K_C\approx10$ ($m=20$); the final ladder should therefore be chosen from measured
-accuracy and integration cost rather than the tiling estimate alone. Once the ladder is
+$\tau_{\mathrm{mem}}/\tau_{\mathrm{conf}}\approx34$ even at 300 K. Once the ladder is
 fixed, the outer search disappears and the amplitude fit is a convex NNLS problem with
 a global optimum.
+
+</div>
+
+<div align="justify">
+
+The ladder is chosen from measured accuracy, not from the tiling argument, which gives
+$K_C=30$ pairs ($m=60$). That pair-only ladder reaches a 2.36% median relative error below
+1 eV, yet leaves the Fermi-crossing column, the largest friction in the dataset, at
+95.5%. Tying $\alpha_j=0.2\beta_j$ turns the low rungs into narrow spikes, so pairs alone
+cannot form the broad zero-centred peak there, and the Markovian anchor hides the failure
+by pinning $\Lambda(x_0,0)$. The adopted ladder, built by <code>split_ladder</code>, puts
+16 pairs over the resonance band (0.049–9.4 eV), 4 over the tail band (12–60 eV), and
+$K_R=3$ real rates between the identifiability floor $5\,d\omega$ and 0.05 eV. At $m=43$ it
+reaches a 1.29% median error below 1 eV and 8.06% at the crossing. The measurements are
+in <a href="docs/design/0003-poles-and-the-mirror.md"><code>design/0003</code></a> and
+<a href="docs/DEVLOG.md"><code>DEVLOG.md</code></a>.
 
 </div>
 
