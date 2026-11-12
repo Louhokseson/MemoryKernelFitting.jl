@@ -79,6 +79,11 @@ const SERIES = [
 const HARTREE_TO_EV = hartree_to_eV(1.0)
 const X_CROSSING = 2.0203445
 
+# The classical run is deterministic, so its loss is a spike, not a distribution.
+# run_gle.jl integrates it once; older artefacts hold N identical copies. `std` of a
+# single sample is NaN, so the one-trajectory case is caught by length.
+is_spike(v) = length(v) == 1 || std(v) < 1e-9
+
 function load_run(infile)
     h5open(infile, "r") do f
         d = Dict(s.key => (
@@ -269,7 +274,7 @@ function energy_loss_figure(data, landscape, meta)
         d = data[s.key]
         # The classical run is deterministic: a spike at zero, drawn as a rule rather
         # than a one-bin histogram that would misread as a wide distribution.
-        if std(d.loss) < 1e-9
+        if is_spike(d.loss)
             vlines!(ax_h, [mean(d.loss)]; color = s.colour, linewidth = 2, linestyle = s.dash)
         else
             hist!(ax_h, d.loss; bins = 30, color = (s.colour, 0.55),
@@ -281,7 +286,7 @@ function energy_loss_figure(data, landscape, meta)
     # *separate* rows because below ~1.5 eV the two distributions — and their means —
     # coincide, and one shared row would print the labels on top of each other.
     let ymax = maximum(maximum(h.weights) for h in
-            (fit(Histogram, data[s.key].loss; nbins = 30) for s in SERIES if std(data[s.key].loss) > 1e-9))
+            (fit(Histogram, data[s.key].loss; nbins = 30) for s in SERIES if !is_spike(data[s.key].loss)))
         ylims!(ax_h, 0, 1.52 * ymax)
         x_lo = min(0.0, minimum(minimum(data[s.key].loss) for s in SERIES))
         x_hi = maximum(maximum(data[s.key].loss) for s in SERIES)
@@ -290,7 +295,7 @@ function energy_loss_figure(data, landscape, meta)
         for (s, yfrac, align) in zip(SERIES, (1.04, 1.22, 0.72),
                                      ((:center, :bottom), (:center, :bottom), (:left, :bottom)))
             d = data[s.key]
-            x = std(d.loss) < 1e-9 ? x_lo + 0.04 * (x_hi - x_lo) : mean(d.loss)
+            x = is_spike(d.loss) ? x_lo + 0.04 * (x_hi - x_lo) : mean(d.loss)
             # A label centred on a distribution hugging the right axis edge clips;
             # once the mean is in the last sixth of the range, hang it to the left.
             x > x_hi - 0.17 * (x_hi - x_lo) && (align = (:right, :bottom))

@@ -42,8 +42,11 @@
 # Initial conditions are monoenergetic and identical across methods and trajectories: the
 # beam is not thermally broadened, so every trajectory starts at the same `x₀` and `v₀` and
 # the ensemble spread is *entirely* the noise. That makes the comparison as tight as it can
-# be — the classical run has no noise and so no spread at all, which is why its standard
-# error is exactly zero and not a bug.
+# be — the classical run has no noise and so no spread at all. It is therefore integrated
+# *once*: N copies would be N bit-identical trajectories, and on the cluster they cost as
+# much wall time as the MDEF ensemble (~25 s of ~105 s per run), almost all of it
+# distributed overhead. Its standard error is stored as exactly zero, and its
+# `per_traj_loss` has length 1 (the group's `n_trajectories` attribute says so).
 
 using DrWatson
 @quickactivate "MemoryKernelFitting"
@@ -214,9 +217,11 @@ const V_ASYMPTOTE = PES(austrip(40.0u"Å"))
 # ------------------------------------------------------------------------------------
 
 """
-    run_ensemble(label, build) → NamedTuple
+    run_ensemble(label, build; ntraj = N_TRAJ) → NamedTuple
 
-`build()` returns `(sim, extra_outputs)`. The simulation is built **once**: SciMLBase
+`build()` returns `(sim, extra_outputs)`. `ntraj = 1` is for the noiseless run only: the
+spreads it reports are then exactly zero, which is true of a deterministic run and of
+nothing else. The simulation is built **once**: SciMLBase
 deep-copies the whole problem — `sim` included — for every trajectory, so there is no
 shared mutable state to protect, and [`SeededIC`](@ref) redraws the auxiliary bath on
 each copy from a stream keyed on the trajectory index.
@@ -225,7 +230,8 @@ Parallelism is whatever the session offers ([`ensemble_algorithm`](@ref)); the r
 are identical in distribution under all three, and the `s(0)` seeds are identical
 outright, so a run on `n` workers is comparable with a run on one.
 """
-function run_ensemble(label, build)
+function run_ensemble(label, build; ntraj = N_TRAJ)
+    ntraj ≥ 1 || error("$label: ntraj must be at least 1, got $ntraj")
     sim, outs = build()
     u0 = DynamicsVariables(sim, hcat(V0), hcat(X0))
     dist = SeededIC(u0, kT, SEED)
@@ -236,12 +242,14 @@ function run_ensemble(label, build)
     # wall time is ⌈N_TRAJ / nworkers⌉ trajectories: 3 for 400 on a 168-core node,
     # instead of 4.
     timing = @timed run_dynamics(sim, (0.0, T_FINAL), dist;
-                                 dt = MD_DT, trajectories = N_TRAJ,
-                                 selection = 1:N_TRAJ,
+                                 dt = MD_DT, trajectories = ntraj,
+                                 selection = 1:ntraj,
                                  ensemble_algorithm = ENSEMBLE,
                                  pmap_batch_size = 1,
                                  output = (OutputPosition, OutputVelocity, outs...))
-    sols = timing.value
+    # `run_dynamics` unwraps a one-trajectory ensemble to the bare solution
+    # (`NQCDynamics/src/Ensembles/run_dynamics.jl:128`); put it back in a vector.
+    sols = ntraj == 1 ? [timing.value] : timing.value
 
     # Trajectory averages. The initial conditions are identical across trajectories, so
     # ⟨x(t)⟩ and ⟨E(t)⟩ are meaningful curves and not a smear over different starts.
@@ -249,13 +257,13 @@ function run_ensemble(label, build)
     xt = zeros(nsave); Et = zeros(nsave); xt2 = zeros(nsave); Et2 = zeros(nsave)
     n_avg = 0                                         # trajectories on the save grid
 
-    E_final = zeros(N_TRAJ)
-    x_turn = zeros(N_TRAJ)
-    x_end = zeros(N_TRAJ)
-    s_final = fill(NaN, N_TRAJ)
-    stuck = falses(N_TRAJ)
+    E_final = zeros(ntraj)
+    x_turn = zeros(ntraj)
+    x_end = zeros(ntraj)
+    s_final = fill(NaN, ntraj)
+    stuck = falses(ntraj)
 
-    for k in 1:N_TRAJ
+    for k in 1:ntraj
         sol = sols[k]
         r = [p[1] for p in sol[:OutputPosition]]
         v = [p[1] for p in sol[:OutputVelocity]]
@@ -277,11 +285,14 @@ function run_ensemble(label, build)
 
     loss = E_TOTAL .- E_final                        # energy handed to the electrons
     E_trans = E_final .- V_ASYMPTOTE                 # what the molecule leaves with
-    se(v) = std(v) / sqrt(length(v))
+    # One trajectory means the deterministic run (see the docstring): its spread is
+    # exactly zero, not the NaN `std` gives for a single sample.
+    sd(v) = length(v) == 1 ? 0.0 : std(v)
+    se(v) = sd(v) / sqrt(length(v))
     # Trajectories off the save grid used to be dropped from the mean curves without a
     # word while the sums were still divided by N_TRAJ. Say so, and average over the ones
     # actually summed.
-    n_avg == N_TRAJ || @warn "$label: $(N_TRAJ - n_avg) of $N_TRAJ trajectories did not save $nsave points; the mean curves use the other $n_avg"
+    n_avg == ntraj || @warn "$label: $(ntraj - n_avg) of $ntraj trajectories did not save $nsave points; the mean curves use the other $n_avg"
     n = max(n_avg, 1)
     xt ./= n; Et ./= n
     x_sd = sqrt.(max.(xt2 ./ n .- xt .^ 2, 0.0))
@@ -289,7 +300,7 @@ function run_ensemble(label, build)
 
     return (; label, wall = timing.time, per_traj_loss = loss,
             t = collect((0:N_STEPS) .* MD_DT), xt, Et, x_sd, E_sd,
-            loss = mean(loss), loss_se = se(loss), loss_sd = std(loss),
+            loss = mean(loss), loss_se = se(loss), loss_sd = sd(loss),
             E_trans = mean(E_trans), E_trans_se = se(E_trans),
             x_turn = mean(x_turn), x_turn_se = se(x_turn),
             x_end = mean(x_end), stuck = mean(stuck),
@@ -351,9 +362,11 @@ results = [
         return Simulation{MDEF}(atoms, model; temperature = T_K * u"K"), ()
     end),
 
+    # Deterministic: no friction, no noise, and the same x₀, v₀ every time, so one
+    # trajectory is the whole ensemble.
     run_ensemble("Classical (no friction)", function ()
         return Simulation{Classical}(atoms, pes; temperature = T_K * u"K"), ()
-    end),
+    end; ntraj = 1),
 ]
 
 println("="^96)
@@ -393,6 +406,9 @@ h5open(outfile, "w") do f
             g[string(k)] = getfield(r, k)
         end
         g["per_traj_loss"] = r.per_traj_loss
+        # The file-level `n_trajectories` is N_TRAJ, the size of the noisy ensembles; the
+        # classical group holds one trajectory, and this says so per group.
+        attrs(g)["n_trajectories"] = length(r.per_traj_loss)
         # Subsample the mean trajectory to one point per 0.25 fs (10.3 aut), whatever the
         # step. 8001 points at dt = 0.0125 fs is more than any figure needs, and a step
         # sweep should not change the saved grid. 0.25 fs is a whole number of steps for

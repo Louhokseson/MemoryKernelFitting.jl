@@ -194,7 +194,11 @@ end
 legend_elements() = [LineElement(color = s.colour, linestyle = s.dash, linewidth = 2)
                      for s in SERIES]
 
-mean_se(v) = (mean(v), std(v) / sqrt(length(v)))
+# One trajectory is the deterministic classical run, which run_gle.jl integrates once
+# (older artefacts hold N identical copies). Its spread is exactly zero, not the NaN
+# `std` gives for a single sample.
+spread(v) = length(v) == 1 ? 0.0 : std(v)
+mean_se(v) = (mean(v), spread(v) / sqrt(length(v)))
 
 # "95 ± 10 meV" — the precision follows the size of the error. A hopless BCME ensemble
 # reads −0.02 meV, which "%.1f" would print as "-0.0".
@@ -408,7 +412,7 @@ function sweep_figure(runs, meta)
     ends = Float64[]
     for s in SERIES
         μ = [mean(r.data[s.key].loss) for r in runs]
-        se = [std(r.data[s.key].loss) / sqrt(length(r.data[s.key].loss)) for r in runs]
+        se = [last(mean_se(r.data[s.key].loss)) for r in runs]
         errorbars!(ax_a, E, μ, se; color = s.colour, whiskerwidth = 6, linewidth = 1)
         scatterlines!(ax_a, E, μ; color = s.colour, linestyle = s.dash, linewidth = 2,
                       markersize = 9, strokecolor = :white, strokewidth = 1.5)
@@ -519,7 +523,7 @@ println("="^100)
 for r in runs, s in SERIES
     d = r.data[s.key]
     @printf("%-5.1f %-18s %10.2f %8.2f %8.2f %5d/%-3d %8.4f\n", r.E, s.label,
-            1e3 * mean(d.loss), 1e3 * std(d.loss) / sqrt(length(d.loss)), 1e3 * std(d.loss),
+            1e3 * mean(d.loss), 1e3 * last(mean_se(d.loss)), 1e3 * spread(d.loss),
             d.n_trapped, d.n_total, d.x_turn)
 end
 println("="^100)
